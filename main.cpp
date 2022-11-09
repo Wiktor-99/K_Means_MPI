@@ -3,6 +3,8 @@
 #include <vector>
 #include <cmath>
 #include <limits.h>
+#include <random>
+#include <algorithm>
 
 struct Image
 {
@@ -58,5 +60,60 @@ int main(){
     auto image = getImageFromFile(fileName, width, hight);
     int centroids{7};
 
-    imageToFile("img/lennaArray2.txt", image);
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distr(0, 512*512-1);
+
+    Image clusterPoints2;
+
+
+    for (int i = 0; i < centroids; i++){
+        auto pixelIndex = distr(gen);
+        clusterPoints2.appendPixel(image.redPixel[pixelIndex], image.greenPixel[pixelIndex], image.bluePixel[pixelIndex]);
+    }
+
+    std::vector<int> assignment(image.redPixel.size());
+    for (int iterations = 0; iterations < 100; ++iterations){
+        std::vector<std::vector<int>> clusters(centroids);
+
+        for (int i = 0; i < image.redPixel.size(); ++i) {
+            auto clusterIndex = assignCluster(image.redPixel[i], image.greenPixel[i], image.bluePixel[i], clusterPoints2, centroids);
+            clusters[clusterIndex].push_back(i);
+            assignment[i] = clusterIndex;
+        }
+
+
+        Image clusterPoints;
+        clusterPoints.redPixel = std::vector<int>(centroids);
+        clusterPoints.greenPixel = std::vector<int>(centroids);
+        clusterPoints.bluePixel = std::vector<int>(centroids);
+
+        for (int i = 0; i < centroids; ++i){
+            for (int j = 0;j < clusters[i].size(); ++j) {
+            clusterPoints.redPixel[i] += image.redPixel[clusters[i][j]];
+            clusterPoints.greenPixel[i] += image.greenPixel[clusters[i][j]];
+            clusterPoints.bluePixel[i] += image.bluePixel[clusters[i][j]];
+            }
+            clusterPoints.redPixel[i] /= clusters[i].size();
+            clusterPoints.greenPixel[i] /= clusters[i].size();
+            clusterPoints.bluePixel[i] /= clusters[i].size();
+        }
+
+        clusterPoints2 = clusterPoints;
+    }
+
+    Image output;
+
+    for (int i = 0; i < width * hight; ++i) {
+        int clusterIndex = assignment[i];
+        int red = clusterPoints2.redPixel[clusterIndex];
+        int green = clusterPoints2.greenPixel[clusterIndex];
+        int blue = clusterPoints2.bluePixel[clusterIndex];
+
+        output.appendPixel(red, green, blue);
+    }
+
+
+    imageToFile("img/lennaArray2.txt", output);
 }
