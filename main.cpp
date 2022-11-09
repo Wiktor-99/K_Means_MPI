@@ -4,6 +4,12 @@
 
 struct Image
 {
+    void appendPixel(int r, int g, int b){
+        redPixel.push_back(r);
+        greenPixel.push_back(g);
+        bluePixel.push_back(b);
+    }
+
     std::vector<int> redPixel;
     std::vector<int> greenPixel;
     std::vector<int> bluePixel;
@@ -15,9 +21,7 @@ Image getImageFromFile(std::string fileName, int width, int hight){
     for (int i = 0; i < width * hight; ++i){
         int r, g, b;
         file >> r >> g >> b;
-        output.redPixel.push_back(r);
-        output.greenPixel.push_back(g);
-        output.bluePixel.push_back(b);
+        output.appendPixel(r, g, b);
     }
     return output;
 }
