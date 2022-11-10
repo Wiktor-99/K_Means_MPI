@@ -9,6 +9,23 @@ struct Pixel {
     int r;
     int g;
     int b;
+
+    Pixel& operator+=(const Pixel& other){
+        r += other.r;
+        g += other.g;
+        b += other.b;
+
+        return *this;
+    }
+
+    Pixel& operator/=(int value){
+        r /= value;
+        g /= value;
+        b /= value;
+
+        return *this;
+    }
+
 };
 
 std::vector<Pixel> getImageFromFile(std::string fileName, int width, int hight){
@@ -81,13 +98,9 @@ int main(){
 
         for (int i = 0; i < centroids; ++i){
             for (int j = 0;j < clusters[i].size(); ++j) {
-                clusterPoints[i].r += image[clusters[i][j]].r;
-                clusterPoints[i].g += image[clusters[i][j]].g;
-                clusterPoints[i].b += image[clusters[i][j]].b;
+                clusterPoints[i] += image[clusters[i][j]];
             }
-            clusterPoints[i].r /= clusters[i].size();
-            clusterPoints[i].g /= clusters[i].size();
-            clusterPoints[i].b /= clusters[i].size();
+            clusterPoints[i] /= clusters[i].size();
         }
     }
 
