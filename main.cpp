@@ -77,40 +77,65 @@ std::vector<Pixel> getRandomCentroid(const std::vector<Pixel>& image, int maxInd
     return clusterPoints;
 }
 
+Pixel sumPixelsAssignedToCluster(const std::vector<int>& cluster, const std::vector<Pixel>& image){
+    Pixel sum{};
+    for (int j = 0;j < cluster.size(); ++j) {
+        sum += image[cluster[j]];
+    }
+    return sum;
+}
+
+std::vector<Pixel> updateCentroidValues(const std::vector<std::vector<int>>& clusters, const std::vector<Pixel>& image){
+    std::vector<Pixel> centroids(clusters.size());
+    for (int i = 0; i < clusters.size(); ++i){
+        centroids[i] = sumPixelsAssignedToCluster(clusters[i], image);
+        centroids[i] /= clusters[i].size();
+    }
+    return centroids;
+}
+
+std::vector<std::vector<int>> makeClusters(const std::vector<Pixel>& centroids, const std::vector<Pixel>& image, std::vector<int>& assignment){
+    std::vector<std::vector<int>> clusters(centroids.size());
+
+    for (int i = 0; i < image.size(); ++i) {
+        auto clusterIndex = assignCluster(image[i], centroids);
+        clusters[clusterIndex].push_back(i);
+        assignment[i] = clusterIndex;
+    }
+
+    return clusters;
+}
+
+std::vector<Pixel> reconstructImage(const std::vector<int>& assignment, const std::vector<Pixel>& centroidsPoints){
+    std::vector<Pixel>  output;
+    for (int i = 0; i < assignment.size(); ++i) {
+        int clusterIndex = assignment[i];
+        output.push_back(centroidsPoints[clusterIndex]);
+    }
+    return output;
+}
+
+std::vector<Pixel> kMeansClustering(const std::vector<Pixel>& image, int centroids, int iterations){
+    std::vector<Pixel> centroidsPoints = getRandomCentroid(image, image.size() - 1, centroids);
+    std::vector<int> assignment(image.size());
+
+    for (int i = 0; i < iterations; ++i){
+        std::vector<std::vector<int>> clusters = makeClusters(centroidsPoints, image, assignment);
+        centroidsPoints = updateCentroidValues(clusters, image);
+    }
+
+    return reconstructImage(assignment, centroidsPoints);
+}
+
 int main(){
     std::string fileName{"img/lennaArray.txt"};
     int width{512};
     int hight{512};
     auto image = getImageFromFile(fileName, width, hight);
     int centroids{5};
+    int iterations{100};
 
-    std::vector<Pixel> clusterPoints = getRandomCentroid(image, width * hight - 1, centroids);
-    std::vector<int> assignment(image.size());
-
-    for (int iterations = 0; iterations < 5; ++iterations){
-        std::vector<std::vector<int>> clusters(centroids);
-
-        for (int i = 0; i < image.size(); ++i) {
-            auto clusterIndex = assignCluster(image[i], clusterPoints);
-            clusters[clusterIndex].push_back(i);
-            assignment[i] = clusterIndex;
-        }
-
-        for (int i = 0; i < centroids; ++i){
-            for (int j = 0;j < clusters[i].size(); ++j) {
-                clusterPoints[i] += image[clusters[i][j]];
-            }
-            clusterPoints[i] /= clusters[i].size();
-        }
-    }
-
-    std::vector<Pixel>  output;
-
-    for (int i = 0; i < width * hight; ++i) {
-        int clusterIndex = assignment[i];
-        output.push_back(clusterPoints[clusterIndex]);
-    }
-
+    std::vector<Pixel>  output = kMeansClustering(image, centroids, iterations);
 
     imageToFile("img/lennaArray2.txt", output);
 }
