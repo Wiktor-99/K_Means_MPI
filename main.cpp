@@ -47,6 +47,19 @@ int assignCluster(Pixel imagePixel, const std::vector<Pixel>& clusters)
 	return std::distance(std::begin(distances), std::min_element(std::begin(distances), std::end(distances)));
 }
 
+std::vector<Pixel> getRandomCentroid(const std::vector<Pixel>& image, int maxIndex, int numberOfCentroids){
+    std::vector<Pixel> clusterPoints;
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distr(0, maxIndex);
+
+    for (int i = 0; i < numberOfCentroids; i++){
+        auto pixelIndex = distr(gen);
+        clusterPoints.push_back(image[pixelIndex]);
+    }
+    return clusterPoints;
+}
+
 int main(){
     std::string fileName{"img/lennaArray.txt"};
     int width{512};
@@ -54,21 +67,10 @@ int main(){
     auto image = getImageFromFile(fileName, width, hight);
     int centroids{5};
 
-
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distr(0, 512*512-1);
-
-    std::vector<Pixel> clusterPoints;
-
-
-    for (int i = 0; i < centroids; i++){
-        auto pixelIndex = distr(gen);
-        clusterPoints.push_back(image[pixelIndex]);
-    }
-
+    std::vector<Pixel> clusterPoints = getRandomCentroid(image, width * hight - 1, centroids);
     std::vector<int> assignment(image.size());
-    for (int iterations = 0; iterations < 500; ++iterations){
+
+    for (int iterations = 0; iterations < 5; ++iterations){
         std::vector<std::vector<int>> clusters(centroids);
 
         for (int i = 0; i < image.size(); ++i) {
