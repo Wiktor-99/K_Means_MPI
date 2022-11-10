@@ -1,5 +1,6 @@
 from PIL import Image
 import numpy as np
+import sys
 
 def imageToFile(pathInput, pathOutput):
     img = Image.open(pathInput)
@@ -16,6 +17,12 @@ def saveArrayAsImage(array, outputName = 'img/lennaAfterClustering.png'):
 
 
 if __name__ == "__main__":
-    imageToFile('img/lenna.png', 'img/lennaArray.txt')
-    array = fileToArray()
-    saveArrayAsImage(array)
+    if len(sys.argv) != 3 and len(sys.argv) != 5:
+        print('Wrong number of parameters')
+        print('To save image as array, pass path to input file and output file')
+        print('To save image from array, pass path to input file, output file, width and hight of image')
+    elif len(sys.argv) == 3:
+        imageToFile(sys.argv[1], sys.argv[2])
+    else:
+        array = fileToArray(sys.argv[1], int(sys.argv[3]), int(sys.argv[4]))
+        saveArrayAsImage(array, sys.argv[2])
