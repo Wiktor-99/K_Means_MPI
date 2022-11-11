@@ -34,20 +34,23 @@ struct PixelSum {
     Pixel pixel;
 };
 
+using Pixels = std::vector<Pixel>;
+using PixelsSums = std::vector<PixelSum>;
+
 struct KMeansParams {
     int start;
     int end;
     int centroids;
     int iterations;
-    std::vector<Pixel> image;
+    Pixels image;
 };
 
 struct KMeansParamsFormMainProcess {
     int centroids;
     int iterations;
     int processes;
-    std::vector<Pixel> image;
-    std::vector<Pixel> centroidsPoints;
+    Pixels image;
+    Pixels centroidsPoints;
 };
 
 struct KMeansMpiParams {
@@ -62,9 +65,9 @@ struct MpiReceiveParameters {
     MPI_Status* status;
 };
 
-std::vector<Pixel> getImageFromFile(std::string fileName, int width, int hight){
+Pixels getImageFromFile(std::string fileName, int width, int hight){
     std::fstream file{fileName};
-    std::vector<Pixel>  output;
+    Pixels  output;
     for (int i = 0; i < width * hight; ++i){
         int r, g, b;
         file >> r >> g >> b;
@@ -73,7 +76,7 @@ std::vector<Pixel> getImageFromFile(std::string fileName, int width, int hight){
     return output;
 }
 
-void imageToFile(std::string fileName, const std::vector<Pixel>& image){
+void imageToFile(std::string fileName, const Pixels& image){
     std::fstream file{fileName};
     for (int i = 0; i < image.size(); ++i){
         file << image[i].r << ' ' << image[i].g << ' ' << image[i].b << ' ';
@@ -86,7 +89,7 @@ double euclideanDistance(Pixel imagePixel, Pixel clusterPixel){
                      std::pow(imagePixel.b - clusterPixel.b, 2));
 }
 
-int assignCluster(Pixel imagePixel, const std::vector<Pixel>& clusters)
+int assignCluster(Pixel imagePixel, const Pixels& clusters)
 {
     std::vector<int> distances;
 	for (const auto& clusterPixel : clusters)
@@ -98,8 +101,8 @@ int assignCluster(Pixel imagePixel, const std::vector<Pixel>& clusters)
 	return std::distance(std::begin(distances), std::min_element(std::begin(distances), std::end(distances)));
 }
 
-std::vector<Pixel> getRandomCentroid(const std::vector<Pixel>& image, int maxIndex, int numberOfCentroids){
-    std::vector<Pixel> clusterPoints;
+Pixels getRandomCentroid(const Pixels& image, int maxIndex, int numberOfCentroids){
+    Pixels clusterPoints;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> distr(0, maxIndex);
@@ -111,7 +114,7 @@ std::vector<Pixel> getRandomCentroid(const std::vector<Pixel>& image, int maxInd
     return clusterPoints;
 }
 
-Pixel sumPixelsAssignedToCluster(const std::vector<int>& cluster, const std::vector<Pixel>& image){
+Pixel sumPixelsAssignedToCluster(const std::vector<int>& cluster, const Pixels& image){
     Pixel sum{};
     for (int j = 0;j < cluster.size(); ++j) {
         sum += image[cluster[j]];
@@ -119,8 +122,8 @@ Pixel sumPixelsAssignedToCluster(const std::vector<int>& cluster, const std::vec
     return sum;
 }
 
-std::vector<PixelSum> sumValuesAssignedToCentroids(const std::vector<std::vector<int>>& clusters, const std::vector<Pixel>& image){
-    std::vector<PixelSum> output(clusters.size());;
+PixelsSums sumValuesAssignedToCentroids(const std::vector<std::vector<int>>& clusters, const Pixels& image){
+    PixelsSums output(clusters.size());;
 
     for (int i = 0; i < clusters.size(); ++i){
         if (not clusters[i].empty()) {
@@ -132,7 +135,7 @@ std::vector<PixelSum> sumValuesAssignedToCentroids(const std::vector<std::vector
     return output;
 }
 
-std::vector<std::vector<int>> makeClusters(const std::vector<Pixel>& centroids, const std::vector<Pixel>& image, std::vector<int>& assignment){
+std::vector<std::vector<int>> makeClusters(const Pixels& centroids, const Pixels& image, std::vector<int>& assignment){
     std::vector<std::vector<int>> clusters(centroids.size());
 
     for (int i = 0; i < image.size(); ++i) {
@@ -144,8 +147,8 @@ std::vector<std::vector<int>> makeClusters(const std::vector<Pixel>& centroids, 
     return clusters;
 }
 
-std::vector<Pixel> reconstructImage(const std::vector<int>& assignment, const std::vector<Pixel>& centroidsPoints){
-    std::vector<Pixel>  output;
+Pixels reconstructImage(const std::vector<int>& assignment, const Pixels& centroidsPoints){
+    Pixels  output;
     for (int i = 0; i < assignment.size(); ++i) {
         int clusterIndex = assignment[i];
         output.push_back(centroidsPoints[clusterIndex]);
@@ -165,7 +168,7 @@ int sendIndexOfDataToSubprocess(int processes, int dataChunkSize, int NumberTag)
     return start;
 }
 
-std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOfValuesAssignedToCentroids, const std::vector<PixelSum>& centroidsOfSubprocess) {
+PixelsSums sumClusterValuesFromSubprocess(PixelsSums sumOfValuesAssignedToCentroids, const PixelsSums& centroidsOfSubprocess) {
     for (int i = 0; i < centroidsOfSubprocess.size(); ++i){
         sumOfValuesAssignedToCentroids[i].pixel += centroidsOfSubprocess[i].pixel;
         sumOfValuesAssignedToCentroids[i].count += centroidsOfSubprocess[i].count;
@@ -173,8 +176,8 @@ std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOf
     return sumOfValuesAssignedToCentroids;
 }
 
-std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOfValuesAssignedToCentroids, int processes, const MpiReceiveParameters& mpiParams) {
-     std::vector<PixelSum> centroids(sumOfValuesAssignedToCentroids.size());
+PixelsSums sumClusterValuesFromSubprocess(PixelsSums sumOfValuesAssignedToCentroids, int processes, const MpiReceiveParameters& mpiParams) {
+     PixelsSums centroids(sumOfValuesAssignedToCentroids.size());
     for (int i = 0; i < processes - 1; ++i){
         MPI_Recv(centroids.data(), centroids.size(), mpiParams.type, i + 1, mpiParams.tag, MPI_COMM_WORLD, mpiParams.status);
         sumOfValuesAssignedToCentroids = sumClusterValuesFromSubprocess(sumOfValuesAssignedToCentroids, centroids);
@@ -182,8 +185,8 @@ std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOf
     return sumOfValuesAssignedToCentroids;
 }
 
-std::vector<Pixel> updateCentroidsValues(const std::vector<PixelSum>& sumOfValuesAssignedToCentroids) {
-    std::vector<Pixel> centroidsPoints(sumOfValuesAssignedToCentroids.size());
+Pixels updateCentroidsValues(const PixelsSums& sumOfValuesAssignedToCentroids) {
+    Pixels centroidsPoints(sumOfValuesAssignedToCentroids.size());
     for (int i = 0; i < sumOfValuesAssignedToCentroids.size(); ++i){
         centroidsPoints[i] = sumOfValuesAssignedToCentroids[i].pixel;
         centroidsPoints[i] /= sumOfValuesAssignedToCentroids[i].count;
@@ -204,10 +207,10 @@ std::vector<int> sumOfAllAssignments(const MpiReceiveParameters& mpiParams, int 
 std::vector<int> kMeansSubprocessLoop(const KMeansParams& params, const KMeansMpiParams& mpiParams){
     std::vector<int> assignment(params.end-params.start);
     for (int i = 0; i < params.iterations; ++i){
-        std::vector<Pixel> centroidsPoints(params.centroids);
+        Pixels centroidsPoints(params.centroids);
         MPI_Bcast(centroidsPoints.data(), params.centroids, mpiParams.pixelDt, 0, MPI_COMM_WORLD);
 
-        std::vector<Pixel> imagePart(params.image.begin() + params.start, params.image.begin() + params.end);
+        Pixels imagePart(params.image.begin() + params.start, params.image.begin() + params.end);
         std::vector<std::vector<int>> clusters = makeClusters(centroidsPoints, imagePart, assignment);
         auto sumOfValuesAssignedToCentroids = sumValuesAssignedToCentroids(clusters, imagePart);
         MPI_Send(sumOfValuesAssignedToCentroids.data(),
@@ -220,13 +223,13 @@ std::vector<int> kMeansSubprocessLoop(const KMeansParams& params, const KMeansMp
     return assignment;
 }
 
-std::pair<std::vector<int>, std::vector<Pixel>> kMeansMainLoop(KMeansParamsFormMainProcess params, const KMeansMpiParams& mpiParams){
+std::pair<std::vector<int>, Pixels> kMeansMainLoop(KMeansParamsFormMainProcess params, const KMeansMpiParams& mpiParams){
     MPI_Status status;
     std::vector<int> assignment(params.image.size());
     for (int i = 0; i < params.iterations; ++i) {
         MPI_Bcast(params.centroidsPoints.data(), params.centroids, mpiParams.pixelDt, 0, MPI_COMM_WORLD);
         std::vector<std::vector<int>> clusters = makeClusters(params.centroidsPoints, params.image, assignment);
-        std::vector<PixelSum> sumOfValuesAssignedToCentroids = sumValuesAssignedToCentroids(clusters, params.image);
+        PixelsSums sumOfValuesAssignedToCentroids = sumValuesAssignedToCentroids(clusters, params.image);
 
         MpiReceiveParameters paramsForReceive{.type = mpiParams.sumPixelDt, .tag = mpiParams.tag, .status = &status};
         sumOfValuesAssignedToCentroids = sumClusterValuesFromSubprocess(
@@ -272,11 +275,11 @@ int main(int argc, char *argv[]) {
     if (rank == 0) {
         const int size = image.size();
         const int dataChunkSize = size / processes;
-        std::vector<Pixel> centroidsPoints = getRandomCentroid(image, image.size() - 1, centroids);
+        Pixels centroidsPoints = getRandomCentroid(image, image.size() - 1, centroids);
 
         const int start = sendIndexOfDataToSubprocess(processes, dataChunkSize, NumberTag);
         const int end = size;
-        const std::vector<Pixel> imagePart(image.begin() + start, image.begin() + end);
+        const Pixels imagePart(image.begin() + start, image.begin() + end);
         const KMeansParamsFormMainProcess params{centroids, iterations, processes, imagePart, centroidsPoints};
 
         const auto assignmentsAndCentroidsPoints = kMeansMainLoop(params, mpiParams);
