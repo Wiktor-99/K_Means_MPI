@@ -188,6 +188,10 @@ int main(int argc, char *argv[]) {
     int width{512};
     int hight{512};
     auto image = getImageFromFile(fileName, width, hight);
+
+    int centroids{std::stoi(argv[1])};
+    int iterations{std::stoi(argv[2])};
+
     int processes;
     int rank;
     MPI_Comm_size(MPI_COMM_WORLD, &processes);
@@ -205,13 +209,10 @@ int main(int argc, char *argv[]) {
     const int NumberTag{1};
     const int arrayTag{2};
     const int arrayTag2{3};
-    int size = image.size();
-    int dataChunkSize = size / processes;
-
-    int centroids{5};
-    int iterations{20};
 
     if (rank == 0) {
+        int size = image.size();
+        int dataChunkSize = size / processes;
         std::vector<Pixel> centroidsPoints = getRandomCentroid(image, image.size() - 1, centroids);
 
         int start = sendIndexOfDataToSubprocess(processes, dataChunkSize, NumberTag);
