@@ -188,8 +188,10 @@ PixelsSums sumClusterValuesFromSubprocess(PixelsSums sumOfValuesAssignedToCentro
 Pixels updateCentroidsValues(const PixelsSums& sumOfValuesAssignedToCentroids) {
     Pixels centroidsPoints(sumOfValuesAssignedToCentroids.size());
     for (int i = 0; i < sumOfValuesAssignedToCentroids.size(); ++i){
-        centroidsPoints[i] = sumOfValuesAssignedToCentroids[i].pixel;
-        centroidsPoints[i] /= sumOfValuesAssignedToCentroids[i].count;
+        if (sumOfValuesAssignedToCentroids[i].count != 0) {
+            centroidsPoints[i] = sumOfValuesAssignedToCentroids[i].pixel;
+            centroidsPoints[i] /= sumOfValuesAssignedToCentroids[i].count;
+        }
     }
     return centroidsPoints;
 }
