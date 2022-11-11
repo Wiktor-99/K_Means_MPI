@@ -234,22 +234,20 @@ int main(int argc, char *argv[]) {
     } else {
 
         int start{}, end{};
-        std::vector<int> assignment1;
         MPI_Recv(&start, 1, MPI_INT, 0, NumberTag, MPI_COMM_WORLD, &status);
         MPI_Recv(&end, 1, MPI_INT, 0, NumberTag, MPI_COMM_WORLD, &status);
+        std::vector<int> assignment(end-start);
         for (int i = 0; i < iterations; ++i){
             std::vector<Pixel> centroidsPoints(centroids);
             MPI_Bcast(centroidsPoints.data(), centroids, pixelDt, 0, MPI_COMM_WORLD);
 
             std::vector<Pixel> imagePart(image.begin() + start, image.begin() + end);
-            std::vector<int> assignment(imagePart.size());
             std::vector<std::vector<int>> clusters = makeClusters(centroidsPoints, imagePart, assignment);
             auto centroidsPoints2 = sumValuesAssignedToCentroids(clusters, imagePart);
             MPI_Send(centroidsPoints2.data(), centroidsPoints2.size(), sumPixelDt, 0, arrayTag, MPI_COMM_WORLD);
-            assignment1 = assignment;
         }
 
-        MPI_Send(assignment1.data(), assignment1.size(), MPI_INT, 0, arrayTag2, MPI_COMM_WORLD);
+        MPI_Send(assignment.data(), assignment.size(), MPI_INT, 0, arrayTag2, MPI_COMM_WORLD);
     }
 
     MPI_Finalize();
