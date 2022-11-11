@@ -152,7 +152,7 @@ std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOf
     return sumOfValuesAssignedToCentroids;
 }
 
-std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOfValuesAssignedToCentroids, int processes, MpiReceiveParameters mpiParams) {
+std::vector<PixelSum> sumClusterValuesFromSubprocess(std::vector<PixelSum> sumOfValuesAssignedToCentroids, int processes, const MpiReceiveParameters& mpiParams) {
      std::vector<PixelSum> centroids(sumOfValuesAssignedToCentroids.size());
     for (int i = 0; i < processes - 1; ++i){
         MPI_Recv(centroids.data(), centroids.size(), mpiParams.type, i + 1, mpiParams.tag, MPI_COMM_WORLD, mpiParams.status);
@@ -168,6 +168,16 @@ std::vector<Pixel> updateCentroidsValues(const std::vector<PixelSum>& sumOfValue
         centroidsPoints[i] /= sumOfValuesAssignedToCentroids[i].count;
     }
     return centroidsPoints;
+}
+
+std::vector<int> sumOfAllAssignments(const MpiReceiveParameters& mpiParams, int dataChunkSize, int processes){
+    std::vector<int> sumOfAssignments;
+    std::vector<int> chunkOfData(dataChunkSize);
+    for (int i = 0; i < processes - 1; ++i){
+        MPI_Recv(chunkOfData.data(), dataChunkSize, mpiParams.type, i + 1, mpiParams.tag, MPI_COMM_WORLD, mpiParams.status);
+        sumOfAssignments.insert(sumOfAssignments.end(), chunkOfData.begin(), chunkOfData.end());
+    }
+    return sumOfAssignments;
 }
 
 int main(int argc, char *argv[]) {
@@ -219,14 +229,8 @@ int main(int argc, char *argv[]) {
             centroidsPoints = updateCentroidsValues(sumOfValuesAssignedToCentroids);
         }
 
-
-        std::vector<int> chunkOfData(dataChunkSize);
-        std::vector<int> sumOfAssignments;
-        for (int i = 0; i < processes - 1; ++i){
-            MPI_Recv(chunkOfData.data(), dataChunkSize, MPI_INT, i + 1, arrayTag2, MPI_COMM_WORLD, &status);
-            sumOfAssignments.insert(sumOfAssignments.end(), chunkOfData.begin(), chunkOfData.end());
-        }
-
+        MpiReceiveParameters params{.type = MPI_INT, .tag = arrayTag2, .status = &status};
+        std::vector<int> sumOfAssignments = sumOfAllAssignments(params, dataChunkSize, processes);
         sumOfAssignments.insert(sumOfAssignments.end(), assignment.begin(), assignment.end());
 
         imageToFile("img/lennaArray3.txt", reconstructImage(sumOfAssignments, centroidsPoints));
