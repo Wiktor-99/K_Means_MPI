@@ -126,6 +126,18 @@ std::vector<Pixel> reconstructImage(const std::vector<int>& assignment, const st
     return output;
 }
 
+int sendIndexOfDataToSubprocess(int processes, int dataChunkSize, int NumberTag) {
+    int start = 0;
+    int end = dataChunkSize;
+    for (int i = 0; i < processes - 1; ++i){
+        MPI_Send(&start, 1, MPI_INT, i + 1, NumberTag, MPI_COMM_WORLD);
+        MPI_Send(&end, 1, MPI_INT, i + 1, NumberTag, MPI_COMM_WORLD);
+        start += dataChunkSize;
+        end += dataChunkSize;
+    }
+    return start;
+}
+
 int main(int argc, char *argv[]) {
     if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
         return -1;
@@ -152,26 +164,16 @@ int main(int argc, char *argv[]) {
     const int arrayTag2 = 3;
     MPI_Status status;
     int size = image.size();
-    int dataChunk = size / processes;
+    int dataChunkSize = size / processes;
 
     int centroids{5};
-    int iterations{2000};
+    int iterations{20};
 
     if (rank == 0) {
-        auto image = getImageFromFile(fileName, width, hight);
-
         std::vector<Pixel> centroidsPoints = getRandomCentroid(image, image.size() - 1, centroids);
 
-        int start = 0;
-        int end = dataChunk;
-        for (int i = 0; i < processes - 1; ++i){
-            MPI_Send(&start, 1, MPI_INT, i + 1, NumberTag, MPI_COMM_WORLD);
-            MPI_Send(&end, 1, MPI_INT, i + 1, NumberTag, MPI_COMM_WORLD);
-            start += dataChunk;
-            end += dataChunk;
-        }
-
-        end = size;
+        int start = sendIndexOfDataToSubprocess(processes, dataChunkSize, NumberTag);
+        int end = size;
         std::vector<Pixel> imagePart(image.begin() + start, image.begin() + end);
         std::vector<int> assignment(imagePart.size());
 
@@ -198,10 +200,10 @@ int main(int argc, char *argv[]) {
         }
 
 
-        std::vector<int> chunkOfData(dataChunk);
+        std::vector<int> chunkOfData(dataChunkSize);
         std::vector<int> sumOfAssignments;
         for (int i = 0; i < processes - 1; ++i){
-            MPI_Recv(chunkOfData.data(), dataChunk, MPI_INT, i + 1, arrayTag2, MPI_COMM_WORLD, &status);
+            MPI_Recv(chunkOfData.data(), dataChunkSize, MPI_INT, i + 1, arrayTag2, MPI_COMM_WORLD, &status);
             sumOfAssignments.insert(sumOfAssignments.end(), chunkOfData.begin(), chunkOfData.end());
         }
 
