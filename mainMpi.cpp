@@ -1,6 +1,5 @@
 #include <mpi.h>
 #include <iostream>
-#include <iostream>
 #include <fstream>
 #include <vector>
 #include <cmath>
@@ -43,7 +42,15 @@ struct KMeansParams {
     std::vector<Pixel> image;
 };
 
-struct KMeansMpiParamsForSubprocess {
+struct KMeansParamsFormMainProcess {
+    int centroids;
+    int iterations;
+    int processes;
+    std::vector<Pixel> image;
+    std::vector<Pixel> centroidsPoints;
+};
+
+struct KMeansMpiParams {
     MPI_Datatype pixelDt;
     MPI_Datatype sumPixelDt;
     int tag;
@@ -194,7 +201,7 @@ std::vector<int> sumOfAllAssignments(const MpiReceiveParameters& mpiParams, int 
     return sumOfAssignments;
 }
 
-std::vector<int> kMeansSubprocessLoop(const KMeansParams& params, const KMeansMpiParamsForSubprocess& mpiParams){
+std::vector<int> kMeansSubprocessLoop(const KMeansParams& params, const KMeansMpiParams& mpiParams){
     std::vector<int> assignment(params.end-params.start);
     for (int i = 0; i < params.iterations; ++i){
         std::vector<Pixel> centroidsPoints(params.centroids);
@@ -211,6 +218,24 @@ std::vector<int> kMeansSubprocessLoop(const KMeansParams& params, const KMeansMp
                 MPI_COMM_WORLD);
     }
     return assignment;
+}
+
+std::pair<std::vector<int>, std::vector<Pixel>> kMeansMainLoop(KMeansParamsFormMainProcess params, const KMeansMpiParams& mpiParams){
+    MPI_Status status;
+    std::vector<int> assignment(params.image.size());
+    for (int i = 0; i < params.iterations; ++i) {
+        MPI_Bcast(params.centroidsPoints.data(), params.centroids, mpiParams.pixelDt, 0, MPI_COMM_WORLD);
+        std::vector<std::vector<int>> clusters = makeClusters(params.centroidsPoints, params.image, assignment);
+        std::vector<PixelSum> sumOfValuesAssignedToCentroids = sumValuesAssignedToCentroids(clusters, params.image);
+
+        MpiReceiveParameters paramsForReceive{.type = mpiParams.sumPixelDt, .tag = mpiParams.tag, .status = &status};
+        sumOfValuesAssignedToCentroids = sumClusterValuesFromSubprocess(
+            sumOfValuesAssignedToCentroids,
+            params.processes,
+            paramsForReceive);
+        params.centroidsPoints = updateCentroidsValues(sumOfValuesAssignedToCentroids);
+    }
+    return {assignment, params.centroidsPoints};
 }
 
 int main(int argc, char *argv[]) {
@@ -242,29 +267,25 @@ int main(int argc, char *argv[]) {
     const int NumberTag{1};
     const int sumOfPixelsTag{2};
     const int assignmentsTag{3};
+    const KMeansMpiParams mpiParams{pixelDt, sumPixelDt, sumOfPixelsTag};
 
     if (rank == 0) {
-        int size = image.size();
-        int dataChunkSize = size / processes;
+        const int size = image.size();
+        const int dataChunkSize = size / processes;
         std::vector<Pixel> centroidsPoints = getRandomCentroid(image, image.size() - 1, centroids);
 
-        int start = sendIndexOfDataToSubprocess(processes, dataChunkSize, NumberTag);
-        int end = size;
-        std::vector<Pixel> imagePart(image.begin() + start, image.begin() + end);
-        std::vector<int> assignment(imagePart.size());
+        const int start = sendIndexOfDataToSubprocess(processes, dataChunkSize, NumberTag);
+        const int end = size;
+        const std::vector<Pixel> imagePart(image.begin() + start, image.begin() + end);
+        const KMeansParamsFormMainProcess params{centroids, iterations, processes, imagePart, centroidsPoints};
 
-        for (int i = 0; i < iterations; ++i) {
-            MPI_Bcast(centroidsPoints.data(), centroids, pixelDt, 0, MPI_COMM_WORLD);
-            std::vector<std::vector<int>> clusters = makeClusters(centroidsPoints, imagePart, assignment);
-            std::vector<PixelSum> sumOfValuesAssignedToCentroids = sumValuesAssignedToCentroids(clusters, imagePart);
+        const auto assignmentsAndCentroidsPoints = kMeansMainLoop(params, mpiParams);
+        const std::vector<int> assignment = assignmentsAndCentroidsPoints.first;
+        centroidsPoints = assignmentsAndCentroidsPoints.second;
 
-            MpiReceiveParameters params{.type = sumPixelDt, .tag = sumOfPixelsTag, .status = &status};
-            sumOfValuesAssignedToCentroids = sumClusterValuesFromSubprocess(sumOfValuesAssignedToCentroids, processes, params);
-            centroidsPoints = updateCentroidsValues(sumOfValuesAssignedToCentroids);
-        }
 
-        MpiReceiveParameters params{.type = MPI_INT, .tag = assignmentsTag, .status = &status};
-        std::vector<int> sumOfAssignments = sumOfAllAssignments(params, dataChunkSize, processes);
+        const MpiReceiveParameters paramsForReceive{.type = MPI_INT, .tag = assignmentsTag, .status = &status};
+        std::vector<int> sumOfAssignments = sumOfAllAssignments(paramsForReceive, dataChunkSize, processes);
         sumOfAssignments.insert(sumOfAssignments.end(), assignment.begin(), assignment.end());
 
         imageToFile("img/lennaArray3.txt", reconstructImage(sumOfAssignments, centroidsPoints));
@@ -275,7 +296,6 @@ int main(int argc, char *argv[]) {
         MPI_Recv(&end, 1, MPI_INT, 0, NumberTag, MPI_COMM_WORLD, &status);
 
         KMeansParams params{start, end, centroids, iterations, image};
-        KMeansMpiParamsForSubprocess mpiParams{pixelDt, sumPixelDt, sumOfPixelsTag};
         std::vector<int> assignment = kMeansSubprocessLoop(params, mpiParams);
 
         MPI_Send(assignment.data(), assignment.size(), MPI_INT, 0, assignmentsTag, MPI_COMM_WORLD);
